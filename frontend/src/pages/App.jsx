@@ -147,6 +147,27 @@ export default function App() {
             <span className="pill">Core + Advanced</span>
           </header>
 
+          <div className="compute-chip-group" role="radiogroup" aria-label="Compute device">
+            <button
+              type="button"
+              role="radio"
+              aria-checked={coreValues.compute_device === 'cpu'}
+              className={`compute-chip ${coreValues.compute_device === 'cpu' ? 'active' : ''}`}
+              onClick={() => handleCoreChange('compute_device', 'cpu')}
+            >
+              CPU
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={coreValues.compute_device === 'nvidia_gpu'}
+              className={`compute-chip ${coreValues.compute_device === 'nvidia_gpu' ? 'active' : ''}`}
+              onClick={() => handleCoreChange('compute_device', 'nvidia_gpu')}
+            >
+              NVIDIA GPU
+            </button>
+          </div>
+
           <div className="source-toggle" role="tablist" aria-label="Source type">
             <button type="button" className={sourceType === 'upload' ? 'active' : ''} onClick={() => setSourceType('upload')}>Upload File</button>
             <button type="button" className={sourceType === 'url' ? 'active' : ''} onClick={() => setSourceType('url')}>Paste Link</button>
@@ -165,7 +186,7 @@ export default function App() {
           )}
 
           <div className="options-grid">
-            {options.core.map((option) => (
+            {options.core.filter((option) => option.key !== 'compute_device').map((option) => (
               <OptionField key={option.key} option={option} value={coreValues[option.key]} onChange={handleCoreChange} />
             ))}
           </div>

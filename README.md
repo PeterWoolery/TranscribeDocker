@@ -120,4 +120,4 @@ docker compose up --build
 - For production hardening, migrate to Alembic-managed schema migrations.
 
 ## License
-Add your preferred license file before publishing publicly.
+MIT. See [LICENSE](./LICENSE).
