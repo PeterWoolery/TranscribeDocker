@@ -1,0 +1,131 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: transcribedocker
+      POSTGRES_USER: transcribe
+      POSTGRES_PASSWORD: transcribe
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transcribe -d transcribedocker"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      APP_NAME: TranscribeDocker
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://transcribe:transcribe@postgres:5432/transcribedocker
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      ARTIFACT_ROOT: /data/artifacts
+      UPLOAD_TMP_ROOT: /data/uploads_tmp
+      MAX_UPLOAD_BYTES: 2147483648
+      JOB_RETENTION_DAYS: 30
+      OPENAI_TRANSCRIBE_MODEL: gpt-4o-transcribe
+      OPENAI_TRANSLATE_MODEL: gpt-4o-mini-transcribe
+      DEFAULT_ENGINE_MODE: auto_fallback
+      DEFAULT_COMPUTE_DEVICE: ${DEFAULT_COMPUTE_DEVICE:-cpu}
+      BASE_URL: http://localhost:8080
+    volumes:
+      - artifact_data:/data/artifacts
+      - upload_tmp_data:/data/uploads_tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "-l", "INFO"]
+    environment:
+      APP_NAME: TranscribeDocker
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://transcribe:transcribe@postgres:5432/transcribedocker
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      ARTIFACT_ROOT: /data/artifacts
+      UPLOAD_TMP_ROOT: /data/uploads_tmp
+      MAX_UPLOAD_BYTES: 2147483648
+      JOB_RETENTION_DAYS: 30
+      OPENAI_TRANSCRIBE_MODEL: gpt-4o-transcribe
+      OPENAI_TRANSLATE_MODEL: gpt-4o-mini-transcribe
+      DEFAULT_ENGINE_MODE: auto_fallback
+      DEFAULT_COMPUTE_DEVICE: ${DEFAULT_COMPUTE_DEVICE:-cpu}
+      HF_TOKEN: ${HF_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - artifact_data:/data/artifacts
+      - upload_tmp_data:/data/uploads_tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "beat", "-l", "INFO"]
+    environment:
+      APP_NAME: TranscribeDocker
+      APP_ENV: development
+      DATABASE_URL: postgresql+psycopg://transcribe:transcribe@postgres:5432/transcribedocker
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      ARTIFACT_ROOT: /data/artifacts
+      UPLOAD_TMP_ROOT: /data/uploads_tmp
+      MAX_UPLOAD_BYTES: 2147483648
+      JOB_RETENTION_DAYS: 30
+      DEFAULT_ENGINE_MODE: auto_fallback
+      DEFAULT_COMPUTE_DEVICE: ${DEFAULT_COMPUTE_DEVICE:-cpu}
+    volumes:
+      - artifact_data:/data/artifacts
+      - upload_tmp_data:/data/uploads_tmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE: /api/v1
+    depends_on:
+      - api
+
+  gateway:
+    image: nginx:1.27-alpine
+    ports:
+      - "8081:80"
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - frontend
+      - api
+
+volumes:
+  postgres_data:
+  artifact_data:
+  upload_tmp_data:

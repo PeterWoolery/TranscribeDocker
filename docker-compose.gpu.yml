@@ -1,0 +1,5 @@
+services:
+  worker:
+    environment:
+      DEFAULT_COMPUTE_DEVICE: nvidia_gpu
+    gpus: all
