@@ -33,7 +33,7 @@ export default function OptionField({ option, value, onChange }) {
     <label className="field">
       <span>{option.label}</span>
       <input
-        type={option.type === 'number' ? 'number' : 'text'}
+        type={option.type === 'number' ? 'number' : option.type === 'password' ? 'password' : 'text'}
         value={value ?? option.default ?? ''}
         min={option.min ?? undefined}
         max={option.max ?? undefined}

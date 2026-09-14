@@ -14,6 +14,9 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY entrypoint.sh /usr/local/bin/transcribedocker-entrypoint
+
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/transcribedocker-entrypoint"]
 
 EXPOSE 8000
 

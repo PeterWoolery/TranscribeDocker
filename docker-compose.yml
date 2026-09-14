@@ -71,6 +71,7 @@ services:
       DEFAULT_COMPUTE_DEVICE: ${DEFAULT_COMPUTE_DEVICE:-cpu}
       HF_TOKEN: ${HF_TOKEN:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      UPDATE_YTDLP_ON_START: ${UPDATE_YTDLP_ON_START:-true}
     volumes:
       - artifact_data:/data/artifacts
       - upload_tmp_data:/data/uploads_tmp

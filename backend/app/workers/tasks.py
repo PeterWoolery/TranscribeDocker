@@ -83,6 +83,26 @@ def _set_status(
         throttle_state["last_emit_ts"] = now
 
 
+def _store_debug_media(db, job: Job, media_path: Path, out_dir: Path) -> None:
+    if not media_path.exists():
+        return
+
+    suffix = media_path.suffix or ".bin"
+    debug_path = out_dir / f"debug-source{suffix}"
+    shutil.copy2(media_path, debug_path)
+    content_type = mimetypes.guess_type(str(debug_path))[0] or "application/octet-stream"
+    db.add(
+        Artifact(
+            job_id=job.id,
+            file_name=debug_path.name,
+            file_path=str(debug_path),
+            content_type=content_type,
+            size_bytes=debug_path.stat().st_size,
+        )
+    )
+    db.commit()
+
+
 @shared_task(bind=True)
 def process_job_task(self, job_id: str):
     with SessionLocal() as db:
@@ -95,6 +115,7 @@ def process_job_task(self, job_id: str):
         out_dir = Path(settings.artifact_root) / str(job.id)
         job_dir.mkdir(parents=True, exist_ok=True)
         out_dir.mkdir(parents=True, exist_ok=True)
+        media_path: Path | None = None
 
         try:
             _set_status(
@@ -300,6 +321,8 @@ def process_job_task(self, job_id: str):
             )
 
         except Exception as exc:
+            if media_path is not None:
+                _store_debug_media(db, job, media_path, out_dir)
             _set_status(
                 db,
                 job,

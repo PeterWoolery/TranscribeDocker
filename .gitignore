@@ -9,4 +9,8 @@ __pycache__/
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
+*.pem
+*.key
 .DS_Store

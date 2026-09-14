@@ -38,17 +38,24 @@ CORE_OPTIONS = [
         label="Compute Device",
         type="select",
         default=settings.default_compute_device,
-        choices=["cpu", "nvidia_gpu"],
-        help="Choose CPU or NVIDIA GPU (requires CUDA container runtime).",
+        choices=["cpu", "nvidia_gpu", "amd_vulkan"],
+        help="CPU, NVIDIA CUDA, or AMD Vulkan. GPU devices require their matching Compose overlay.",
     ),
 ]
 
 ADVANCED_OPTIONS = [
+    OptionItem(
+        key="openai_api_key",
+        label="OpenAI API Key",
+        type="password",
+        default=None,
+        help="Optional per-job key for OpenAI mode or fallback when no server key is configured.",
+    ),
     OptionItem(key="beam_size", label="Beam Size", type="number", default=5, min=1, max=12, help="Decoder beam size."),
     OptionItem(key="best_of", label="Best Of", type="number", default=5, min=1, max=12, help="Number of candidates sampled."),
     OptionItem(key="temperature", label="Temperature", type="number", default=0, min=0, max=1, help="Sampling temperature."),
     OptionItem(key="vad_filter", label="VAD Filter", type="boolean", default=True, help="Enable voice activity detection."),
-    OptionItem(key="compute_type", label="Compute Type", type="select", default="int8", choices=["int8", "float16", "float32"], help="Inference compute precision."),
+    OptionItem(key="compute_type", label="Compute Type", type="select", default="int8", choices=["int8", "float16", "float32"], help="CPU/NVIDIA inference precision. AMD Vulkan uses GGML model precision instead."),
     OptionItem(key="diarization", label="Speaker Diarization", type="boolean", default=False, help="Identify speaker turns with pyannote pipeline."),
     OptionItem(key="diarization_min_speakers", label="Min Speakers", type="number", default=None, min=1, max=20, help="Lower bound for speaker count."),
     OptionItem(key="diarization_max_speakers", label="Max Speakers", type="number", default=None, min=1, max=20, help="Upper bound for speaker count."),

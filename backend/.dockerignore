@@ -1,0 +1,10 @@
+*
+!app/
+!app/**
+!requirements.txt
+!entrypoint.sh
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/*.pem
+**/*.key

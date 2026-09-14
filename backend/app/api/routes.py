@@ -19,6 +19,15 @@ from app.services.options import get_options
 from app.workers.tasks import process_job_task
 
 router = APIRouter(prefix="/api/v1", tags=["transcription"])
+SENSITIVE_ADVANCED_KEYS = {"openai_api_key"}
+
+
+def sanitize_advanced_settings(advanced: dict) -> dict:
+    sanitized = dict(advanced)
+    for key in SENSITIVE_ADVANCED_KEYS:
+        if sanitized.get(key):
+            sanitized[key] = "********"
+    return sanitized
 
 
 @router.get("/health")
@@ -123,6 +132,7 @@ def get_job(job_id: uuid.UUID, db: Session = Depends(get_db)):
 
     artifacts = db.scalars(select(Artifact).where(Artifact.job_id == job.id)).all()
     payload = JobResponse.model_validate(job).model_dump()
+    payload["advanced"] = sanitize_advanced_settings(payload["advanced"])
     payload["artifacts"] = [ArtifactResponse.model_validate(a).model_dump() for a in artifacts]
     return payload
 

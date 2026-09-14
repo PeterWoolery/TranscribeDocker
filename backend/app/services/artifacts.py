@@ -20,13 +20,20 @@ def to_vtt_timestamp(seconds: float) -> str:
     return f"{h:02}:{m:02}:{s:02}.{ms:03}"
 
 
+def format_timestamped_transcript(segments: list[dict]) -> str:
+    lines = []
+    for seg in segments:
+        lines.append(f"[{to_vtt_timestamp(seg['start'])}] {seg['text'].strip()}")
+    return "\n".join(lines)
+
+
 def write_outputs(base_dir: Path, base_name: str, segments: list[dict], formats: list[str]) -> list[Path]:
     base_dir.mkdir(parents=True, exist_ok=True)
     files: list[Path] = []
 
     if "txt" in formats:
         txt_path = base_dir / f"{base_name}.txt"
-        txt_path.write_text("\n".join(s["text"].strip() for s in segments), encoding="utf-8")
+        txt_path.write_text(format_timestamped_transcript(segments), encoding="utf-8")
         files.append(txt_path)
 
     if "json" in formats:

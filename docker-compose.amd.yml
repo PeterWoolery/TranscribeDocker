@@ -1,0 +1,20 @@
+services:
+  api:
+    environment:
+      DEFAULT_COMPUTE_DEVICE: amd_vulkan
+
+  worker:
+    platform: linux/amd64
+    build:
+      dockerfile: Dockerfile.vulkan
+    command: ["celery", "-A", "app.workers.celery_app:celery_app", "worker", "-l", "INFO", "--concurrency=1"]
+    environment:
+      DEFAULT_COMPUTE_DEVICE: amd_vulkan
+      WHISPER_CPP_MODEL_DIR: /data/whisper_models
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - whisper_models:/data/whisper_models
+
+volumes:
+  whisper_models:

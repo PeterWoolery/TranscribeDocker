@@ -3,6 +3,12 @@ import { createJob, fetchOptions, getArtifactDownloadUrl, getJob } from '../api/
 import OptionField from '../components/OptionField'
 
 const defaultOutputFormats = ['txt', 'srt', 'vtt', 'json']
+const outputFormatChoices = [
+  { key: 'txt', label: 'TXT', help: 'Plain transcript with inline timestamps.' },
+  { key: 'srt', label: 'SRT', help: 'Subtitle file for media players and editors.' },
+  { key: 'vtt', label: 'VTT', help: 'Web subtitle format for browsers and players.' },
+  { key: 'json', label: 'JSON', help: 'Structured segments with timing metadata.' },
+]
 
 function formatTime(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return '--:--'
@@ -23,6 +29,7 @@ export default function App() {
   const [file, setFile] = useState(null)
   const [coreValues, setCoreValues] = useState({ task: 'transcribe', language: 'auto', model: 'medium', engine_mode: 'auto_fallback', compute_device: 'cpu' })
   const [advancedValues, setAdvancedValues] = useState({ beam_size: 5, best_of: 5, temperature: 0, vad_filter: true, compute_type: 'int8', diarization: false })
+  const [outputFormats, setOutputFormats] = useState(defaultOutputFormats)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [jobId, setJobId] = useState('')
   const [job, setJob] = useState(null)
@@ -30,7 +37,11 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    fetchOptions().then(setOptions).catch((e) => setError(e.message))
+    fetchOptions().then((catalog) => {
+      setOptions(catalog)
+      const device = catalog.core.find((option) => option.key === 'compute_device')?.default
+      if (device) setCoreValues((prev) => ({ ...prev, compute_device: device }))
+    }).catch((e) => setError(e.message))
   }, [])
 
   useEffect(() => {
@@ -62,6 +73,13 @@ export default function App() {
       : hasTiming
         ? 'Calculating...'
         : 'N/A'
+  const debugArtifact = useMemo(
+    () => job?.artifacts?.find((artifact) => artifact.file_name.startsWith('debug-source')),
+    [job],
+  )
+  const debugArtifactUrl = debugArtifact ? getArtifactDownloadUrl(job.id, debugArtifact.id) : ''
+  const debugIsVideo = Boolean(debugArtifact?.content_type?.startsWith('video/'))
+  const debugIsAudio = Boolean(debugArtifact?.content_type?.startsWith('audio/'))
 
   const handleCoreChange = (key, value) => {
     setCoreValues((prev) => ({ ...prev, [key]: value }))
@@ -71,9 +89,21 @@ export default function App() {
     setAdvancedValues((prev) => ({ ...prev, [key]: value }))
   }
 
+  const handleOutputFormatToggle = (format) => {
+    setOutputFormats((prev) => (
+      prev.includes(format)
+        ? prev.filter((value) => value !== format)
+        : [...prev, format]
+    ))
+  }
+
   const submitJob = async (e) => {
     e.preventDefault()
     setError('')
+    if (outputFormats.length === 0) {
+      setError('Select at least one output format.')
+      return
+    }
     setIsSubmitting(true)
     try {
       const formData = new FormData()
@@ -99,7 +129,7 @@ export default function App() {
       if (advancedValues.diarization_max_speakers) {
         formData.append('diarization_max_speakers', String(advancedValues.diarization_max_speakers))
       }
-      formData.append('output_formats', defaultOutputFormats.join(','))
+      formData.append('output_formats', outputFormats.join(','))
       formData.append('advanced', JSON.stringify(mergedAdvanced))
       formData.append('metadata', JSON.stringify({ submitted_from: 'web' }))
 
@@ -148,24 +178,22 @@ export default function App() {
           </header>
 
           <div className="compute-chip-group" role="radiogroup" aria-label="Compute device">
-            <button
-              type="button"
-              role="radio"
-              aria-checked={coreValues.compute_device === 'cpu'}
-              className={`compute-chip ${coreValues.compute_device === 'cpu' ? 'active' : ''}`}
-              onClick={() => handleCoreChange('compute_device', 'cpu')}
-            >
-              CPU
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={coreValues.compute_device === 'nvidia_gpu'}
-              className={`compute-chip ${coreValues.compute_device === 'nvidia_gpu' ? 'active' : ''}`}
-              onClick={() => handleCoreChange('compute_device', 'nvidia_gpu')}
-            >
-              NVIDIA GPU
-            </button>
+            {[
+              ['cpu', 'CPU'],
+              ['nvidia_gpu', 'NVIDIA GPU'],
+              ['amd_vulkan', 'AMD Vulkan'],
+            ].map(([device, label]) => (
+              <label key={device} className={`compute-chip ${coreValues.compute_device === device ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="compute_device"
+                  value={device}
+                  checked={coreValues.compute_device === device}
+                  onChange={() => handleCoreChange('compute_device', device)}
+                />
+                {label}
+              </label>
+            ))}
           </div>
 
           <div className="source-toggle" role="tablist" aria-label="Source type">
@@ -190,6 +218,24 @@ export default function App() {
               <OptionField key={option.key} option={option} value={coreValues[option.key]} onChange={handleCoreChange} />
             ))}
           </div>
+
+          <fieldset className="format-section">
+            <legend>Output Formats</legend>
+            <p className="format-help">Choose which transcript artifacts to generate.</p>
+            <div className="format-grid">
+              {outputFormatChoices.map((format) => (
+                <label key={format.key} className={`format-card ${outputFormats.includes(format.key) ? 'active' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={outputFormats.includes(format.key)}
+                    onChange={() => handleOutputFormatToggle(format.key)}
+                  />
+                  <span>{format.label}</span>
+                  <small>{format.help}</small>
+                </label>
+              ))}
+            </div>
+          </fieldset>
 
           <button type="button" className="advanced-toggle" onClick={() => setShowAdvanced((v) => !v)}>
             {showAdvanced ? 'Hide Advanced Settings' : 'Show Advanced Settings'}
@@ -227,6 +273,21 @@ export default function App() {
                     <p><strong>ETA</strong><span>{etaDisplay}</span></p>
                   </div>
                   {job.error_message && <p className="error">{job.error_message}</p>}
+
+                  {finished && job.status === 'failed' && debugArtifact && (debugIsVideo || debugIsAudio) && (
+                    <div className="downloads">
+                      <h3>Failure Debug Media</h3>
+                      {debugIsVideo ? (
+                        <video controls preload="metadata" src={debugArtifactUrl} className="debug-player" />
+                      ) : (
+                        <audio controls preload="metadata" src={debugArtifactUrl} className="debug-player" />
+                      )}
+                      <a key={debugArtifact.id} href={debugArtifactUrl} target="_blank" rel="noreferrer">
+                        <span>{debugArtifact.file_name}</span>
+                        <small>{Math.round(debugArtifact.size_bytes / 1024)} KB</small>
+                      </a>
+                    </div>
+                  )}
 
                   {finished && job.status === 'completed' && (
                     <div className="downloads">

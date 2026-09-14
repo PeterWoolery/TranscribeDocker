@@ -195,6 +195,7 @@ h2 {
 
 .compute-chip-group {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   margin-bottom: 0.9rem;
   padding: 0.35rem;
@@ -204,6 +205,10 @@ h2 {
 }
 
 .compute-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
   border: 1px solid var(--line-strong);
   background: transparent;
   border-radius: 999px;
@@ -215,6 +220,11 @@ h2 {
 .compute-chip.active {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.compute-chip:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 button,
@@ -284,6 +294,56 @@ select {
 
 .options-grid.advanced {
   margin-top: 0.68rem;
+}
+
+.format-section {
+  margin: 0.2rem 0 0;
+  padding: 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.format-section legend {
+  padding: 0 0.35rem;
+  font-weight: 700;
+}
+
+.format-help {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.format-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.format-card {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.72rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  cursor: pointer;
+}
+
+.format-card.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.format-card input {
+  margin: 0;
+}
+
+.format-card span {
+  font-weight: 700;
+}
+
+.format-card small {
+  color: var(--muted);
 }
 
 .switch-field {
@@ -404,6 +464,13 @@ select {
   color: var(--muted);
 }
 
+.debug-player {
+  width: 100%;
+  max-width: 100%;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-alt) 88%, transparent);
+}
+
 .error {
   color: var(--danger);
   font-weight: 700;
@@ -446,6 +513,10 @@ select {
   }
 
   .options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .format-grid {
     grid-template-columns: 1fr;
   }
 

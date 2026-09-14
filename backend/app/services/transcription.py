@@ -11,6 +11,17 @@ from openai import OpenAI
 from app.core.config import settings
 
 
+class EmptyTranscriptionError(RuntimeError):
+    """Raised when a transcription engine returns no usable segments."""
+
+
+def resolve_openai_api_key(advanced: dict | None) -> str | None:
+    candidate = None if advanced is None else advanced.get("openai_api_key")
+    if isinstance(candidate, str):
+        candidate = candidate.strip()
+    return candidate or settings.openai_api_key
+
+
 def probe_duration_seconds(media_path: Path) -> float | None:
     cmd = [
         "ffprobe",
@@ -34,6 +45,10 @@ def probe_duration_seconds(media_path: Path) -> float | None:
         return None
 
 
+def has_transcript_content(segments: list[dict]) -> bool:
+    return any(str(seg.get("text", "")).strip() for seg in segments)
+
+
 def transcribe_local(
     media_path: Path,
     task: str,
@@ -43,6 +58,10 @@ def transcribe_local(
     progress_callback: Callable[[float], None] | None = None,
 ) -> list[dict]:
     requested_device = str(advanced.get("compute_device", settings.default_compute_device)).lower()
+    if requested_device == "amd_vulkan":
+        from app.services.whisper_cpp import transcribe_vulkan
+
+        return transcribe_vulkan(media_path, task, language, model_size, advanced, progress_callback)
     model_device = "cuda" if requested_device in {"cuda", "gpu", "nvidia_gpu"} else "cpu"
 
     model = WhisperModel(
@@ -70,11 +89,12 @@ def transcribe_local(
     return output
 
 
-def transcribe_openai(media_path: Path, task: str, language: str) -> list[dict]:
-    if not settings.openai_api_key:
+def transcribe_openai(media_path: Path, task: str, language: str, advanced: dict | None = None) -> list[dict]:
+    api_key = resolve_openai_api_key(advanced)
+    if not api_key:
         raise RuntimeError("OPENAI_API_KEY is required for openai_api engine mode")
 
-    client = OpenAI(api_key=settings.openai_api_key)
+    client = OpenAI(api_key=api_key)
     model_name = settings.openai_translate_model if task == "translate" else settings.openai_transcribe_model
     with media_path.open("rb") as media_file:
         transcript = client.audio.transcriptions.create(
@@ -100,6 +120,36 @@ def transcribe_openai(media_path: Path, task: str, language: str) -> list[dict]:
     return output
 
 
+def transcribe_local_with_retry(
+    media_path: Path,
+    task: str,
+    language: str,
+    model_size: str,
+    advanced: dict,
+    progress_callback: Callable[[float], None] | None = None,
+) -> list[dict]:
+    segments = transcribe_local(media_path, task, language, model_size, advanced, progress_callback=progress_callback)
+    if has_transcript_content(segments):
+        return segments
+
+    if not bool(advanced.get("vad_filter", True)):
+        raise EmptyTranscriptionError("Local transcription produced no speech segments")
+
+    retry_advanced = dict(advanced)
+    retry_advanced["vad_filter"] = False
+    retry_segments = transcribe_local(
+        media_path,
+        task,
+        language,
+        model_size,
+        retry_advanced,
+        progress_callback=progress_callback,
+    )
+    if has_transcript_content(retry_segments):
+        return retry_segments
+    raise EmptyTranscriptionError("Local transcription produced no speech segments, even with VAD disabled")
+
+
 def run_transcription(
     media_path: Path,
     task: str,
@@ -113,17 +163,37 @@ def run_transcription(
     local_model = model or "medium"
 
     if engine_mode == "local":
-        return transcribe_local(media_path, task, language, local_model, advanced, progress_callback=progress_callback)
+        return transcribe_local_with_retry(
+            media_path,
+            task,
+            language,
+            local_model,
+            advanced,
+            progress_callback=progress_callback,
+        )
 
     if engine_mode == "openai_api":
-        return transcribe_openai(media_path, task, language)
+        segments = transcribe_openai(media_path, task, language, advanced=advanced)
+        if not has_transcript_content(segments):
+            raise EmptyTranscriptionError("OpenAI transcription produced no speech segments")
+        return segments
 
     if engine_mode == "auto_fallback":
         try:
-            return transcribe_local(media_path, task, language, local_model, advanced, progress_callback=progress_callback)
+            return transcribe_local_with_retry(
+                media_path,
+                task,
+                language,
+                local_model,
+                advanced,
+                progress_callback=progress_callback,
+            )
         except Exception:
             if fallback_callback:
                 fallback_callback()
-            return transcribe_openai(media_path, task, language)
+            segments = transcribe_openai(media_path, task, language, advanced=advanced)
+            if not has_transcript_content(segments):
+                raise EmptyTranscriptionError("OpenAI fallback produced no speech segments")
+            return segments
 
     raise RuntimeError(f"Unsupported engine_mode: {engine_mode}")

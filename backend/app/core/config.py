@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     default_engine_mode: str = Field(default="auto_fallback", alias="DEFAULT_ENGINE_MODE")
     default_compute_device: str = Field(default="cpu", alias="DEFAULT_COMPUTE_DEVICE")
+    whisper_cpp_model_dir: str = Field(default="/data/whisper_models", alias="WHISPER_CPP_MODEL_DIR")
     openai_api_key: str | None = Field(default=None, alias="OPENAI_API_KEY")
     openai_transcribe_model: str = Field(default="gpt-4o-transcribe", alias="OPENAI_TRANSCRIBE_MODEL")
     openai_translate_model: str = Field(default="gpt-4o-mini-transcribe", alias="OPENAI_TRANSLATE_MODEL")

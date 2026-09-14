@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-
-from slugify import slugify
 from yt_dlp import YoutubeDL
 
 
@@ -15,27 +13,19 @@ def download_from_url(url: str, job_dir: Path) -> Path:
         ydl_opts = {
             "outtmpl": outtmpl,
             "quiet": True,
-            "no_warnings": True,
             "noplaylist": True,
-            "format": "bestvideo+bestaudio/best",
-            "merge_output_format": "mp4",
+            "format": "bestaudio/best",
         }
         with YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
             file_path = Path(ydl.prepare_filename(info))
             if file_path.exists():
                 return file_path
-            if (job_dir / "source.mp4").exists():
-                return job_dir / "source.mp4"
             raise RuntimeError("YouTube download failed")
 
-    safe_name = slugify(Path(url).name) or "source"
-    output = job_dir / safe_name
+    output = job_dir / "source.%(ext)s"
     with YoutubeDL({"outtmpl": str(output), "quiet": True, "no_warnings": True}) as ydl:
         ydl.download([url])
-
-    if output.exists():
-        return output
 
     files = [p for p in job_dir.iterdir() if p.is_file()]
     if not files:
