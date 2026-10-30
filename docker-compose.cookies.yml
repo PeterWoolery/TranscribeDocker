@@ -1,0 +1,11 @@
+services:
+  worker:
+    environment:
+      YTDLP_COOKIE_FILE: /run/secrets/yt-dlp-cookies.txt
+    volumes:
+      - type: bind
+        source: ./.secrets/yt-dlp-cookies.txt
+        target: /run/secrets/yt-dlp-cookies.txt
+        read_only: true
+        bind:
+          create_host_path: false

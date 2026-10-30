@@ -100,6 +100,67 @@ Other settings such as `MAX_UPLOAD_BYTES` (2 GiB), `JOB_RETENTION_DAYS` (30 days
 - Speaker-diarization controls are present, but the default image does not include a complete diarization setup.
 - Docker environment inspection and rendered Compose configuration can expose configured secrets. Share only redacted diagnostic output.
 
+## Authenticated Panopto / yt-dlp downloads
+
+For videos your account is authorized to watch, supply an exported browser session using the optional cookie overlay. **This is an instance-wide session:** anyone who can submit URL jobs can use its permissions. There is no per-user session isolation. Cookies retain their normal domain/path restrictions; this does not grant access your account lacks.
+
+### Export and enable the session
+
+On the machine with your browser session, sign into the institution's Panopto site (including SSO/MFA) and confirm the target video plays. With host-side `yt-dlp` installed, run these commands from the repository root, replacing the URL with your authorized Viewer URL:
+
+```bash
+umask 077
+mkdir -p .secrets
+chmod 700 .secrets
+yt-dlp --cookies-from-browser firefox --cookies .secrets/yt-dlp-cookies.txt \
+  --skip-download --no-playlist 'https://YOUR-PANOPTO-HOST/Panopto/Pages/Viewer.aspx?id=YOUR-VIDEO-ID'
+chmod 600 .secrets/yt-dlp-cookies.txt
+```
+
+Replace `firefox` with your supported browser, such as `chrome`, or specify a browser profile using yt-dlp's `BROWSER:PROFILE` syntax. Browser extraction runs on the browser machine, not inside Docker. This command exports the browser profile's cookies, including unrelated sites: prefer a dedicated profile containing only the needed session. A trusted Netscape-format cookies.txt export for the relevant site is also accepted. The export must contain at least one cookie and be at most **1 MiB**; JSON exports are not supported. Never paste cookies into job options, issue reports, or logs.
+
+If Docker runs on another host, securely transfer the export to that checkout's `.secrets/yt-dlp-cookies.txt` and apply the same directory/file permissions there. The root-level `.secrets/` directory is Git-ignored and outside both Docker build contexts; keep exports there, never under `backend/app/` or `frontend/src/`.
+
+Start or update the stack with the cookie overlay:
+
+```bash
+# CPU
+docker compose -f docker-compose.yml -f docker-compose.cookies.yml up -d --build
+
+# OR AMD Vulkan
+docker compose -f docker-compose.yml -f docker-compose.amd.yml -f docker-compose.cookies.yml up -d --build
+```
+
+For an existing NVIDIA deployment, substitute `docker-compose.gpu.yml` for the AMD overlay (the NVIDIA prerequisites above still apply). Keep **all the same `-f` arguments in subsequent lifecycle commands**. Submit the Panopto Viewer URL through Paste Link; choose local transcription if media should stay local.
+
+Only the worker receives the read-only source mount and `YTDLP_COOKIE_FILE=/run/secrets/yt-dlp-cookies.txt`. Adding `YTDLP_COOKIE_FILE` to `.env` alone does not enable it. The overlay requires the host file to exist rather than creating a directory in its place. A non-root worker must have permission to read the mounted file.
+
+Each URL download validates the export and uses a separate writable copy in a private system temporary directory (normally `/tmp`, outside job output). The directory/file permissions are `0700`/`0600`. yt-dlp can save cookies there without changing the mounted original. Copies are removed on success and exceptions and never become job artifacts or database fields. Abrupt process termination can leave a temporary copy in the container's writable layer; recreating the worker removes that layer. The original export stays on the host until you remove it.
+
+### Refresh or remove the session
+
+If authentication expires, log in again, confirm playback, and repeat the export command. Wait for active jobs to finish, then recreate the worker so replacement of the bind-mounted file is picked up reliably:
+
+```bash
+# CPU
+docker compose -f docker-compose.yml -f docker-compose.cookies.yml up -d --force-recreate worker
+
+# OR AMD Vulkan
+docker compose -f docker-compose.yml -f docker-compose.amd.yml -f docker-compose.cookies.yml up -d --force-recreate worker
+```
+
+Submit failed downloads as **new jobs**. A plain restart does not reliably pick up an atomically replaced host file. Valid cookie syntax does not prove the session is current or authorized; remaining login errors require refreshing the correct profile/session or checking video permissions. Do not share raw parser diagnostics or cookie values.
+
+To disable session use, wait for active jobs, recreate the worker without the cookie overlay, then remove the export:
+
+```bash
+# CPU; keep -f docker-compose.amd.yml or -f docker-compose.gpu.yml here if applicable
+docker compose -f docker-compose.yml up -d --force-recreate worker
+rm -f .secrets/yt-dlp-cookies.txt
+```
+
+Deleting the export does not revoke the browser session; sign out/revoke it through your institution if needed. The default deployment remains cookie-free when the overlay is omitted.
+
 ## Updating yt-dlp (YouTube downloader)
 
 YouTube changes frequently. The image includes a tested, pinned `yt-dlp` release plus its **EJS scripts and Deno JavaScript runtime**. By default, each worker container start checks the configured Python package index for a newer stable release using `python -m pip install --upgrade 'yt-dlp[default,deno]'` before starting Celery. Already-current packages are reused.
@@ -145,6 +206,8 @@ Named volumes hold PostgreSQL metadata, artifacts, temporary uploads, and (on AM
 | Symptom | What to check |
 | --- | --- |
 | YouTube says “The page needs to be reloaded” | Restart the worker to check for updates, inspect its logs, and submit a new job. Restricted videos, bot checks, or network blocking may still prevent extraction. |
+| Panopto says “only available for registered users” / “Authentication required” | Enable the cookie overlay above, or refresh the authorized browser export, recreate the worker with the same overlays, and submit a new job. Confirm that the account can play this exact video. |
+| `YTDLP_COOKIE_FILE` validation fails | Check the worker's read permission, the 1 MiB limit, and Netscape cookies.txt format; export again without sharing file contents. |
 | Slow first job | Model download/initialization; later jobs reuse the AMD model cache. Try a smaller model for CPU. |
 | AMD job fails | Check host/container `vulkaninfo`, render-node permissions, and the Vulkan initialization log. Use `local` during diagnosis so OpenAI fallback cannot hide the failure. |
 | OpenAI errors | Check the key and provider model/file-format limits. Local mode does not need an API key. |

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     artifact_root: str = Field(default="/data/artifacts", alias="ARTIFACT_ROOT")
     upload_tmp_root: str = Field(default="/data/uploads_tmp", alias="UPLOAD_TMP_ROOT")
+    ytdlp_cookie_file: str | None = Field(default=None, alias="YTDLP_COOKIE_FILE")
 
     max_upload_bytes: int = Field(default=2_147_483_648, alias="MAX_UPLOAD_BYTES")
     job_retention_days: int = Field(default=30, alias="JOB_RETENTION_DAYS")

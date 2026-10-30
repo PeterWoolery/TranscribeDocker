@@ -140,7 +140,7 @@ def process_job_task(self, job_id: str):
                     force=True,
                     throttle_state=throttle_state,
                 )
-                media_path = download_from_url(job.source_url or "", job_dir)
+                media_path = download_from_url(job.source_url or "", job_dir, cookie_file=settings.ytdlp_cookie_file)
             else:
                 staged_upload = Path(settings.upload_tmp_root) / f"_incoming_{job.id}_{job.original_filename}"
                 if not staged_upload.exists():
